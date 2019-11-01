@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 class persHomo:
 	def __init__(self, G):
 		self.G=G # weighted, directed
+		#print(type(self.G))
 		self.Root={}
 		for v in G.nodes:
 			self.Root[v]=None
@@ -23,18 +24,20 @@ class persHomo:
 		for v in G.nodes:
 			self.parent[v]=None
 		
-		self.TreeEdge=set()
-		self.EdgeId={}
-		self.NonTreeEdge=[]
-		self.EdgeCycle={}
+		self.TreeEdge=set() #tree edge set
+		self.EdgeId={} # for every edge, give one id
+		self.NonTreeEdge=[] #non-tree edge list
+		self.EdgeCycle={} 
 		self.HomoCycle={}
-		self.Bnd=[]
-		self.pair=[]
-		self.curG=nx.DiGraph()
-		self.curG.add_nodes_from(self.G.nodes)
+		self.HomoEdgeId=[]
+		self.Bnd=[] #bnd list, every bnd is a vector
+		self.pair=[] #pair list
+		self.curG=nx.DiGraph() #current graph
+		self.curG.add_nodes_from(self.G.nodes) 
 		self.ns_nt_pair={} #u->x->v
 		self.s_pair={} #u<-x->v
 		self.t_pair={} #u->x<-v
+		self.treepath={}
 	def find(self,u):
 		#print(u)
 		if u not in self.Root or not self.Root[u]:
@@ -46,8 +49,12 @@ class persHomo:
 			return [u]
 		return [u]+self.findrootlist(self.parent[u])
 
+	def PrintPair(self):
+		print(len(self.pair))
 
-	def perHom(self, t):
+	def PrintCycle(self):
+		print(self.HomoCycle)
+	def perHom(self, t): #the function to compute persistent path homology, t is the time
 		self.Root={}
 		self.TreeEdge=set()
 		self.EdgeId={}
@@ -59,17 +66,18 @@ class persHomo:
 		self.curG=nx.DiGraph()
 		self.curG.add_nodes_from(self.G.nodes)
 		self.ns_nt_pair={} #u->x->v
-		self.s_pair={} #u<-x->v
-		self.t_pair={} #u->x<-v
+		self.s_pair=collections.defaultdict(list) #u<-x->v
+		self.t_pair=collections.defaultdict(list) #u->x<-v
 		# t is the time
-		edgeSet=collections.defaultdict(set)
+		edgeSet=collections.defaultdict(list)
 		bnd=[]
 		ws=set()
+		#sort edges
 		for e in self.G.edges:
 			#print(e)
 			w=self.G.edges[e]['weight']
 			if w<=t:
-				edgeSet[w].add(e)
+				edgeSet[w].append(e)
 				ws.add(w)
 		#edgeSet.sort(key=lambda x:self.G.edges[x]['weight'])
 		wsl=[w for w in ws]
@@ -82,6 +90,9 @@ class persHomo:
 			edges=edgeSet[weight]
 			s=[]
 			tmpcycle=set()
+			bi=[]
+			tri=[]
+			quad=[]
 			for e in edges:
 				self.curG.add_edge(e[0], e[1])
 				#print(self.Root)
@@ -89,25 +100,14 @@ class persHomo:
 				v=e[1]
 				ru=self.find(u)
 				rv=self.find(v)
-				if ru!=rv:
+				if ru!=rv: #this edge is a tree edge, they will not form a cycle
 					self.Root[rv]=ru
 					self.Root[v]=ru
-					if not self.parent[v]:
-						self.parent[v]=u
+					# if not self.parent[v]:
+					# 	self.parent[v]=u
 					
 					self.TreeEdge.add(e)
-					for w in self.curG.predecessors(v): #u->v<-w
-						if w!=u:
-							self.t_pair[(u, w)]=(weight, (u, v), (w, v))
-							self.t_pair[(w, u)]=(weight, (w, v), (u, v))
-					for w in self.curG.successors(u):#w<-u->v
-						if w!=v:
-							self.s_pair[(w, v)]=(weight, (u, w), (u, v))
-							self.s_pair[(v, w)]=(weight, (u, v), (u, w))
-					for w in self.curG.predecessors(u): #w->u->v
-						self.ns_nt_pair[(w, v)]=(weight, (w, u), (u, v))
-					for w in self.curG.successors(v):
-						self.ns_nt_pair[(u, w)]=(weight, (u, v), (v, w))
+				
 				else:#nontree edge case-------which means a cycle
 					if ru!=rv:
 						print('not equal')
@@ -119,133 +119,107 @@ class persHomo:
 					tmpcycle.add(cnt)
 					cnt+=1
 					
-					
-					
+					#bi-gon
 					if (v, u) in self.curG.edges():
-						a=[]
-						if (u,v) in self.EdgeId:
-							a.append(self.EdgeId[(u, v)]+1)
+						tmp=[0 for i in self.EdgeId]
+						tmp[cnt-1]=1
 						if (v,u) in self.EdgeId:
-							a.append(-self.EdgeId[(v, u)]-1)
-						if a:
-							tmp=[0 for i in self.EdgeId]
-							for aa in a:
-								if aa>0:
-									tmp[aa-1]=1
-								else:
-									tmp[-aa-1]=-1
-							s.append(tmp)
-
+							tmp[self.EdgeId[(v, u)]]=-1
+						s.append(tmp)
+						bi.append(tmp)
+					#triangle
 					if (u, v) in self.ns_nt_pair:
 						time, e1, e2=self.ns_nt_pair[(u, v)] #u->x->v
 						a=[]
+						tmp=[0 for i in self.EdgeId]
+						tmp[cnt-1]=1
 						if e1 in self.EdgeId:
-							a.append(self.EdgeId[e1]+1)
+							tmp[self.EdgeId[e1]]=-1
 						if e2 in self.EdgeId:
-							a.append(self.EdgeId[e2]+1)
-						if (u, v) in self.EdgeId:
-							a.append(-self.EdgeId[(u, v)]-1)
-						if a:
-							tmp=[0 for i in self.EdgeId]
-							for aa in a:
-								if aa>0:
-									tmp[aa-1]=1
-								else:
-									tmp[-aa-1]=-1
-							s.append(tmp)
+							tmp[self.EdgeId[e2]]=-1
+						
+						s.append(tmp)
+						tri.append(tmp)
 
 					if (u, v) in self.s_pair:
-						time, e1, e2=self.s_pair[(u, v)] #u<-x->v
-						a=[]
-						if e1 in self.EdgeId:
-							a.append(self.EdgeId[e1]+1)
-						if e2 in self.EdgeId:
-							a.append(-self.EdgeId[e2]-1)
-						if (u, v) in self.EdgeId:
-							a.append(self.EdgeId[(u, v)]+1)
-						if a:
+						#print(self.s_pair[(u, v)])
+						for (time, e1, e2) in self.s_pair[(u, v)]: #u<-x->v
 							tmp=[0 for i in self.EdgeId]
-							for aa in a:
-								if aa>0:
-									tmp[aa-1]=1
-								else:
-									tmp[-aa-1]=-1
+							tmp[cnt-1]=1
+							if e1 in self.EdgeId:
+								tmp[self.EdgeId[e1]]=1
+							if e2 in self.EdgeId:
+								tmp[self.EdgeId[e2]]=-1
+						
 							s.append(tmp)
+							tri.append(tmp)
 
 					if (u, v) in self.t_pair:
-						time, e1, e2=self.t_pair[(u, v)] #u->x<-v
-						a=[]
-						if e1 in self.EdgeId:
-							a.append(-self.EdgeId[e1]-1)
-						if e2 in self.EdgeId:
-							a.append(self.EdgeId[e2]+1)
-						if (u, v) in self.EdgeId:
-							a.append(self.EdgeId[(u, v)]+1)
-						if a:
+						for (time, e1, e2) in self.t_pair[(u, v)]: #u->x<-v
 							tmp=[0 for i in self.EdgeId]
-							for aa in a:
-								if aa>0:
-									tmp[aa-1]=1
-								else:
-									tmp[-aa-1]=-1
+							tmp[cnt-1]=1
+							if e1 in self.EdgeId:
+								tmp[self.EdgeId[e1]]=-1
+							if e2 in self.EdgeId:
+								tmp[self.EdgeId[e2]]=1
 							s.append(tmp)
+							tri.append(tmp)
 					#####Quad
 
-					for w in self.curG.successors(v):
-						if (u, w) not in self.ns_nt_pair:
-							self.ns_nt_pair[(u, w)]=(weight, (u, v), (v, w))
+					for w in self.curG.successors(v): #u->x->w
+						if w==u or (u, w) not in self.ns_nt_pair:
 							continue
 						time, e1, e2=self.ns_nt_pair[(u, w)]
-						a=[]
-						if e1 in self.EdgeId:
-							a.append(self.EdgeId[e1]+1)
-						if e2 in self.EdgeId:
-							a.append(self.EdgeId[e2]+1)
-						if (u, v) in self.EdgeId:
-							a.append(-self.EdgeId[(u, v)]-1)
+						tmp=[0 for i in self.EdgeId]
+						tmp[cnt-1]=1
 						if (v, w) in self.EdgeId:
-							a.append(-self.EdgeId[(v, w)]-1)
-						if a:
-							tmp=[0 for i in self.EdgeId]
-							for aa in a:
-								if aa>0:
-									tmp[aa-1]=1
-								else:
-									tmp[-aa-1]=-1
-							s.append(tmp)
-						self.ns_nt_pair[(u,w)]=(weight, (u, v), (v, w))
+							tmp[self.EdgeId[(v, w)]]=1
+						if e1 in self.EdgeId:
+							tmp[self.EdgeId[e1]]=-1
+						if e2 in self.EdgeId:
+							tmp[self.EdgeId[e2]]=-1
+						s.append(tmp)
+						quad.append(tmp)
+						# self.ns_nt_pair[(u,w)]=(weight, (u, v), (v, w))
 
-					for w in self.curG.predecessors(u):
-						if (w, v) not in self.ns_nt_pair:
-							self.ns_nt_pair[(w, v)]=(weight, (w, u), (u, v))
+					for w in self.curG.predecessors(u): #w->x->v
+						if w==v or (w, v) not in self.ns_nt_pair:
 							continue
 						time, e1, e2=self.ns_nt_pair[(w, v)]
-						a=[]
-						if e1 in self.EdgeId:
-							a.append(self.EdgeId[e1]+1)
-						if e2 in self.EdgeId:
-							a.append(self.EdgeId[e2]+1)
-						if (u, v) in self.EdgeId:
-							a.append(-self.EdgeId[(u, v)]-1)
+						tmp=[0 for i in self.EdgeId]
+						tmp[cnt-1]=1
 						if (w, u) in self.EdgeId:
-							a.append(-self.EdgeId[(w, u)]-1)
-						if a:
-							tmp=[0 for i in self.EdgeId]
-							for aa in a:
-								if aa>0:
-									tmp[aa-1]=1
-								else:
-									tmp[-aa-1]=-1
-							s.append(tmp)
-						self.ns_nt_pair[(w, v)]=(weight, (w, u), (u, v))
-					for w in self.curG.predecessors(v):
-						if w!=u:
-							self.t_pair[(u, w)]=(weight, (u, v), (w, v))
-							self.t_pair[(w, u)]=(weight, (w, v), (u, v))
-					for w in self.curG.successors(u):
-						if w!=v:
-							self.s_pair[(w, v)]=(weight, (u, w), (u, v))
-							self.s_pair[(v, w)]=(weight, (u, v), (u, w))
+							tmp[self.EdgeId[(w, u)]]=1
+						if e1 in self.EdgeId:
+							tmp[self.EdgeId[e1]]=-1
+						if e2 in self.EdgeId:
+							tmp[self.EdgeId[e2]]=-1
+						s.append(tmp)
+						quad.append(tmp)
+						# self.ns_nt_pair[(w, v)]=(weight, (w, u), (u, v))
+					# for w in self.curG.predecessors(v):
+					# 	if w!=u:
+					# 		self.t_pair[(u, w)]=(weight, (u, v), (w, v))
+					# 		self.t_pair[(w, u)]=(weight, (w, v), (u, v))
+					# for w in self.curG.successors(u):
+					# 	if w!=v:
+					# 		self.s_pair[(w, v)]=(weight, (u, w), (u, v))
+					# 		self.s_pair[(v, w)]=(weight, (u, v), (u, w))
+
+
+				for w in self.curG.predecessors(v): #u->v<-w
+					if w!=u:
+						self.t_pair[(u, w)].append((weight, (u, v), (w, v)))
+						self.t_pair[(w, u)].append((weight, (w, v), (u, v)))
+						#print(self.t_pair)
+				for w in self.curG.successors(u):#w<-u->v
+					if w!=v:
+						self.s_pair[(w, v)].append((weight, (u, w), (u, v)))
+						self.s_pair[(v, w)].append((weight, (u, v), (u, w)))
+				for w in self.curG.predecessors(u): #w->u->v
+					self.ns_nt_pair[(w, v)]=(weight, (w, u), (u, v))
+				for w in self.curG.successors(v):
+					self.ns_nt_pair[(u, w)]=(weight, (u, v), (v, w))
 
 			if not s:
 				for e in tmpcycle:
@@ -259,11 +233,26 @@ class persHomo:
 				tmp=[0 for j in range(cnt)]
 				tmp[:len(s[i])]=s[i]
 				s[i]=tmp
+			for i in range(len(bi)):
+				tmp=[0 for j in range(cnt)]
+				tmp[:len(bi[i])]=bi[i]
+				bi[i]=tmp
+			for i in range(len(tri)):
+				tmp=[0 for j in range(cnt)]
+				tmp[:len(tri[i])]=tri[i]
+				tri[i]=tmp
+			for i in range(len(quad)):
+				tmp=[0 for j in range(cnt)]
+				tmp[:len(quad[i])]=quad[i]
+				quad[i]=tmp
 				#print(s[i])
 			A=matrix(s, numpy.float32)
 			#print(s)
 			#print(A, self.EdgeCycle[(u,v)])
 			m=A.shape[0]
+
+			#print(matrix_rank(matrix(bi, numpy.float32)), matrix_rank(matrix(tri, numpy.float32)), matrix_rank(matrix(quad, numpy.float32)))
+			print(matrix_rank(A), len(self.NonTreeEdge))
 			for i in range(m):
 				bnd.append(A[i])
 			
@@ -318,7 +307,7 @@ class persHomo:
 
 			#print(last_cnt, cnt)
 			for i in range(len(pivot)):	###every cycle die at weight
-				if pivot[i]!=None and pivot[i]>=last_cnt:
+				if pivot[i]!=None and pivot[i]>=last_cnt:##meaning the cycle born now and die now
 					edge=self.NonTreeEdge[pivot[i]]
 					self.EdgeCycle[edge]=(weight, 2)
 					tmpcycle.remove(pivot[i])
@@ -328,7 +317,7 @@ class persHomo:
 					birthtime, status=self.EdgeCycle[edge]
 
 					deathtime=weight
-
+					#tmpcycle.remove(pivot[i])
 					self.pair.append((birthtime, deathtime))
 					#print(status, birthtime)
 					self.EdgeCycle[edge]=(birthtime, 1)
@@ -346,24 +335,39 @@ class persHomo:
 			#print(len(tmpcycle), len([p for p in pivot if p!=None]))
 			for i in tmpcycle:
 				self.EdgeCycle[self.NonTreeEdge[i]]=(weight, 0)
-					
+		homocount=0
 		for edge in self.EdgeCycle:
 			birthtime,status=self.EdgeCycle[edge]
 			if status==0:
 				self.pair.append((birthtime, t))
+				homocount+=1
+				self.HomoEdgeId.append(edge)
 				self.EdgeCycle[edge]=(birthtime, 1)
 
+		print("homocount", homocount)
 
-nn=50
-G=nx.DiGraph()
-G.add_nodes_from(list(range(nn)))
-E=[]
-for i in range(nn-1):
-	#E.append((i, i+1))
-	G.add_edge(i, i+1, weight=1)
-G.add_edge(nn-1, 0, weight=1)
-g=persHomo(G)
-start = timeit.default_timer()
-g.perHom(1)
-stop = timeit.default_timer()
-print('Time: ', stop - start)
+# nn=50
+# G=nx.DiGraph()
+# G.add_nodes_from(list(range(nn)))
+# E=[]
+# for i in range(nn-1):
+# 	#E.append((i, i+1))
+# 	G.add_edge(i, i+1, weight=1)
+# G.add_edge(nn-1, 0, weight=1)
+# g=persHomo(G)
+# start = timeit.default_timer()
+# g.perHom(1)
+# stop = timeit.default_timer()
+# print('Time: ', stop - start)
+
+# G=nx.DiGraph()
+# G=nx.read_weighted_edgelist("citeseer", create_using = nx.DiGraph())
+# print(len(G.edges))
+# g=persHomo(G)
+# start = timeit.default_timer()
+# g.perHom(2)
+# stop = timeit.default_timer()
+# print('Time: ', stop - start)
+# print(len(g.TreeEdge), len(g.curG.edges), len(g.Bnd))
+# g.PrintPair()
+# g.PrintCycle()
