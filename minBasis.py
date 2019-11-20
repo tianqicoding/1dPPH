@@ -37,6 +37,7 @@ class minBasis:
 		self.HomoBasisId={}
 		self.cycles=[]
 		self.MinHomoBasis=[]
+		self.generators=persG.generators
 		self.HomoBasis=numpy.float_(matrix([[0 for i in range(len(persG.HomoEdgeId))] for i in range(len(persG.NonTreeEdge))]))
 	def ComputeAnnotation(self):
 		cnt=0
@@ -61,7 +62,8 @@ class minBasis:
 			for j in range(A.shape[1]):
 				if j!=t and A[i,j]!=0:
 					self.HomoBasis[t]+=-A[i,j]*1.0/A[i, t]*self.HomoBasis[j]
-		print(matrix_rank(self.HomoBasis))
+		#if len(self.HomoBasis)>0:
+			#print(matrix_rank(self.HomoBasis))
 
 	def ComputeCandidate(self):
 		persG=self.persG
@@ -187,7 +189,7 @@ class minBasis:
 		
 		self.cycles.sort(key=lambda x:x[0])
 		KK=[a for _,a, _ in self.cycles]
-		print(matrix_rank(KK))
+		#print(matrix_rank(KK))
 		
 		
 		i=0

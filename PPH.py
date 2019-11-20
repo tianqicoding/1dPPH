@@ -23,7 +23,7 @@ class persHomo:
 		self.parent={}
 		for v in G.nodes:
 			self.parent[v]=None
-		
+		self.generators=[]
 		self.TreeEdge=set() #tree edge set
 		self.EdgeId={} # for every edge, give one id
 		self.NonTreeEdge=[] #non-tree edge list
@@ -38,19 +38,20 @@ class persHomo:
 		self.s_pair={} #u<-x->v
 		self.t_pair={} #u->x<-v
 		self.treepath={}
+		self.generatorCycles=[]
 	def find(self,u):
-		#print(u)
-		if u not in self.Root or not self.Root[u]:
+		if u not in self.Root:
 			return u
 		return self.find(self.Root[u])
 
-	def findrootlist(self, u):
-		if not self.parent[u]:
-			return [u]
-		return [u]+self.findrootlist(self.parent[u])
+	def findRoot(self, u):
+		return self.Root[u]
 
 	def PrintPair(self):
-		print(len(self.pair))
+		print('pair', self.pair)
+		print('number of cycles:', len(self.EdgeCycle))
+		print('number of nuntreeedge:', len(self.EdgeId))
+		
 
 	def PrintCycle(self):
 		print(self.HomoCycle)
@@ -62,10 +63,12 @@ class persHomo:
 		self.EdgeCycle={}
 		self.HomoCycle={}
 		self.Bnd=[]
+		self.generators=[]
 		self.pair=[]
 		self.curG=nx.DiGraph()
 		self.curG.add_nodes_from(self.G.nodes)
 		self.ns_nt_pair={} #u->x->v
+		self.generatorCycles=[]
 		self.s_pair=collections.defaultdict(list) #u<-x->v
 		self.t_pair=collections.defaultdict(list) #u->x<-v
 		# t is the time
@@ -74,7 +77,6 @@ class persHomo:
 		ws=set()
 		#sort edges
 		for e in self.G.edges:
-			#print(e)
 			w=self.G.edges[e]['weight']
 			if w<=t:
 				edgeSet[w].append(e)
@@ -82,7 +84,6 @@ class persHomo:
 		#edgeSet.sort(key=lambda x:self.G.edges[x]['weight'])
 		wsl=[w for w in ws]
 		wsl.sort()
-		#print(edgeSet)
 		cnt=0
 		for weight in wsl:
 			
@@ -93,21 +94,24 @@ class persHomo:
 			bi=[]
 			tri=[]
 			quad=[]
+			anothercnt=0
 			for e in edges:
 				self.curG.add_edge(e[0], e[1])
-				#print(self.Root)
+				#print(e)
 				u=e[0]
 				v=e[1]
 				ru=self.find(u)
 				rv=self.find(v)
 				if ru!=rv: #this edge is a tree edge, they will not form a cycle
+					#anothercnt+=1
+					
 					self.Root[rv]=ru
 					self.Root[v]=ru
 					# if not self.parent[v]:
 					# 	self.parent[v]=u
-					
+					#print(anothercnt, u, v, ru, rv, self.Root[rv], self.Root[v])
 					self.TreeEdge.add(e)
-				
+					
 				else:#nontree edge case-------which means a cycle
 					if ru!=rv:
 						print('not equal')
@@ -211,7 +215,6 @@ class persHomo:
 					if w!=u:
 						self.t_pair[(u, w)].append((weight, (u, v), (w, v)))
 						self.t_pair[(w, u)].append((weight, (w, v), (u, v)))
-						#print(self.t_pair)
 				for w in self.curG.successors(u):#w<-u->v
 					if w!=v:
 						self.s_pair[(w, v)].append((weight, (u, w), (u, v)))
@@ -223,13 +226,10 @@ class persHomo:
 
 			if not s:
 				for e in tmpcycle:
-					self.EdgeCycle[e]=(weight, 0)#####0 means nontrivial cycle has not been paired
-				#print((u, v))
+					self.EdgeCycle[self.NonTreeEdge[e]]=(weight, 0)#####0 means nontrivial cycle has not been paired
 				continue
 			#self.EdgeCycle[(u,v)]=(weight, 2) #####2 means trivial cycle
-			#print(len(s))
 			for i in range(len(s)):
-				#print(s[i], cnt, len(s[i]))
 				tmp=[0 for j in range(cnt)]
 				tmp[:len(s[i])]=s[i]
 				s[i]=tmp
@@ -247,16 +247,11 @@ class persHomo:
 				quad[i]=tmp
 				#print(s[i])
 			A=matrix(s, numpy.float32)
-			#print(s)
-			#print(A, self.EdgeCycle[(u,v)])
 			m=A.shape[0]
 
-			#print(matrix_rank(matrix(bi, numpy.float32)), matrix_rank(matrix(tri, numpy.float32)), matrix_rank(matrix(quad, numpy.float32)))
-			print(matrix_rank(A), len(self.NonTreeEdge))
 			for i in range(m):
 				bnd.append(A[i])
 			
-			#print(self.Bnd)
 			for i, (tpivot, tind) in enumerate(self.Bnd):
 				#print(tpivot, tind, cnt)
 				tind=tind.tolist()[0]
@@ -271,12 +266,10 @@ class persHomo:
 			I=set(range(m))
 			pivot=[None for i in range(m)]
 			#A=numpy.float_(A)
-			#print(A)
 		
 
 			for i in range(m):
 				for tpivot, tind in self.Bnd:
-					#print(A.shape, tind.shape)
 					if A[i, tpivot]!=0:
 						A[i]=A[i]-tind*1.0/tind[0,tpivot]*A[i, tpivot]
 					
@@ -304,11 +297,11 @@ class persHomo:
 						if tind[0, j]!=0:
 							tind=tind-A[i]*1.0/A[i, j]*tind[0, j]
 						
-
-			#print(last_cnt, cnt)
+			
 			for i in range(len(pivot)):	###every cycle die at weight
 				if pivot[i]!=None and pivot[i]>=last_cnt:##meaning the cycle born now and die now
 					edge=self.NonTreeEdge[pivot[i]]
+
 					self.EdgeCycle[edge]=(weight, 2)
 					tmpcycle.remove(pivot[i])
 					self.Bnd.append((pivot[i], A[i]))
@@ -319,9 +312,9 @@ class persHomo:
 					deathtime=weight
 					#tmpcycle.remove(pivot[i])
 					self.pair.append((birthtime, deathtime))
-					#print(status, birthtime)
 					self.EdgeCycle[edge]=(birthtime, 1)
 					self.Bnd.append((pivot[i], A[i]))
+					self.generators.append(A[i])
 					# tt=[]
 					# for a,b in self.Bnd:
 					# 	#print(b)
@@ -332,11 +325,25 @@ class persHomo:
 					# print(q1, q2)
 					# if q1!=q2:
 					# 	return
-			#print(len(tmpcycle), len([p for p in pivot if p!=None]))
 			for i in tmpcycle:
 				self.EdgeCycle[self.NonTreeEdge[i]]=(weight, 0)
+
 		homocount=0
+		homo1=0
+		homo2=0
+		homo0=0
 		for edge in self.EdgeCycle:
+			birthtime,status=self.EdgeCycle[edge]
+			if status==0:
+				homo0+=1
+			elif status==1:
+
+				homo1+=1
+			else:
+				homo2+=1
+
+		for edge in self.EdgeCycle:
+
 			birthtime,status=self.EdgeCycle[edge]
 			if status==0:
 				self.pair.append((birthtime, t))
@@ -345,6 +352,152 @@ class persHomo:
 				self.EdgeCycle[edge]=(birthtime, 1)
 
 		print("homocount", homocount)
+		print("homo0:", homo0)
+		print("homo1:", homo1)
+		print("homo2:", homo2)
+
+	def findCycle(self, filename):#####canbe done only when there is only one component
+		treeNodes=set(self.G.nodes)
+		lev={}
+		l=list(self.TreeEdge)
+		lp=[0 for i in range(len(l))]
+		while treeNodes:
+			root=treeNodes.pop()
+			#print(root)
+			lev[root]=(root,0,0, root)
+			q=collections.deque()
+			q.append(root)
+			while q:
+				v=q.popleft()
+				_, level, _, r=lev[v]
+				for i in range(len(l)):
+					if lp[i]==1:
+						continue
+					
+
+					e=l[i]
+					#print(e, v)
+					if e[0]==v:
+						lp[i]=1
+						q.append(e[1])
+						lev[e[1]]=(v,level+1, 1, root)
+						treeNodes.remove(e[1])
+					elif e[1]==v:
+						lp[i]=1
+						q.append(e[0])
+						lev[e[0]]=(v,level+1, -1, root)
+						treeNodes.remove(e[0])
+			#print(len(treeNodes))
+		print(lev)
+		for v in self.generators:
+			edgecycle=set()
+			for index in range(v.shape[1]):
+				if v[0,index]==0:
+					continue
+				
+				edge=self.NonTreeEdge[index]
+				
+				
+				v1=edge[0]
+				v2=edge[1]
+				if v1==v2:
+					print('wrong')
+				_, d1, _, r1=lev[v1]
+				_, d2, _, r2=lev[v2]
+				if r1!=r2:
+					print('wrong')
+				
+				if edge not in edgecycle:
+					edgecycle.add(edge)
+				else:
+					edgecycle.remove(edge)
+				
+				while d1>d2:
+					parent, d1, _in, r1=lev[v1]
+					#print(d1)
+					if v1==parent:
+						print(v1, parent1, edgecycle)
+					if _in==-1:
+						if (v1, parent) not in edgecycle:
+							edgecycle.add((v1, parent))
+						else:
+							edgecycle.remove((v1, parent))
+						
+					elif _in==1:
+						if (parent, v1) not in edgecycle:
+							edgecycle.add((parent, v1))
+						else:
+							edgecycle.remove((parent, v1))
+						
+					v1=parent
+					d1-=1
+				while d1<d2:
+					parent, d2, _in, r=lev[v2]
+					#print(d1)
+					if v2==parent:
+						print(v2, parent2, edgecycle)
+					if _in==-1:
+						if (v2, parent) not in edgecycle:
+							edgecycle.add((v2, parent))
+						else:
+							edgecycle.remove((v2, parent))
+						
+					elif _in==1:
+						if (parent, v2) not in edgecycle:
+							edgecycle.add((parent, v2))
+						else:
+							edgecycle.remove((parent, v2))
+					
+					v2=parent
+					d2-=1
+
+				while v1!=v2 and d1>0:
+					parent1, d1, _, r=lev[v1]
+					if v1==parent1:
+						print(v1, parent1, edgecycle)
+					if _in==-1:
+
+						if (v1, parent1) not in edgecycle:
+							edgecycle.add((v1, parent1))
+						else:
+							edgecycle.remove((v1, parent1))
+						
+					elif _in==1:
+						if (parent1, v1) not in edgecycle:
+							edgecycle.add((parent1, v1))
+						else:
+							edgecycle.remove((parent1, v1))
+					
+					parent2, d2, _, r=lev[v2]
+					if v2==parent2:
+						print(v2, parent2, edgecycle)
+					if _in==-1:
+						if (v2, parent2) not in edgecycle:
+							edgecycle.add((v2, parent2))
+						else:
+							edgecycle.remove((v2, parent2))
+						
+					elif _in==1:
+						if (parent2, v2) not in edgecycle:
+							edgecycle.add((parent2, v2))
+						else:
+							edgecycle.remove((parent2, v2))
+					v1,v2=parent1,parent2
+				#print(edgecycle)
+			self.generatorCycles.append(edgecycle)
+		file=open(filename,"w")
+			#print(self.MinHomoBasis)
+		for cycle in self.generatorCycles:
+			for e in cycle:
+				file.write('(')
+				file.write(str(e[0]))
+				file.write('\t')
+				file.write(str(e[1]))
+				file.write(')')
+				file.write('\t')
+			file.write('\n')
+		file.close()
+
 
 # nn=50
 # G=nx.DiGraph()
@@ -356,8 +509,10 @@ class persHomo:
 # G.add_edge(nn-1, 0, weight=1)
 # g=persHomo(G)
 # start = timeit.default_timer()
-# g.perHom(1)
+# g.perHom(2)
+# print(g.Root)
 # stop = timeit.default_timer()
+# g.PrintPair()
 # print('Time: ', stop - start)
 
 # G=nx.DiGraph()
